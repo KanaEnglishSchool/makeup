@@ -144,6 +144,40 @@
     .choice-card .choice-icon { font-size: 32px; margin-bottom: 8px; }
     .choice-card .choice-title { font-size: 15px; font-weight: 700; color: var(--primary-dark); }
     .choice-card .choice-desc { font-size: 12px; color: var(--text-light); margin-top: 4px; }
+
+    /* Student picker cards */
+    .student-card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 10px;
+      border: 2px solid var(--border);
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .student-card:active, .student-card.selected {
+      border-color: var(--primary);
+      background: var(--primary-light);
+    }
+    .student-card .sc-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--primary-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+    .student-card .sc-info { flex: 1; }
+    .student-card .sc-name { font-weight: 700; font-size: 16px; }
+    .student-card .sc-class { font-size: 12px; color: var(--text-light); margin-top: 2px; }
+    .student-card .sc-arrow { color: var(--text-light); font-size: 20px; }
+
     .absence-option {
       background: var(--card);
       border-radius: 10px;
@@ -161,7 +195,6 @@
     .absence-option .ao-detail { font-size: 13px; color: var(--text-light); margin-top: 2px; }
     .absence-option .ao-expiry { font-size: 11px; color: var(--warning); margin-top: 4px; }
 
-    /* Date list cards */
     .date-card {
       background: var(--card);
       border-radius: 12px;
@@ -195,7 +228,6 @@
     .date-card .dc-spots.limited { background: var(--warning-bg); color: var(--warning); }
     .date-card .dc-spots.full { background: var(--error-bg); color: var(--error); }
 
-    /* Time slot cards inside date selection */
     .slot-option {
       background: var(--card);
       border-radius: 10px;
@@ -319,6 +351,26 @@
       border-radius: 50%; animation: spin 0.8s linear infinite;
       vertical-align: middle; margin-right: 8px;
     }
+    .student-banner {
+      background: var(--primary-light);
+      border-radius: 10px;
+      padding: 10px 14px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+    .student-banner .sb-name {
+      font-weight: 700;
+      color: var(--primary-dark);
+    }
+    .student-banner .sb-change {
+      color: var(--primary);
+      cursor: pointer;
+      font-size: 12px;
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
@@ -336,12 +388,12 @@
   <!-- CHOICE SCREEN -->
   <div id="choiceScreen" class="container hidden">
     <div class="choice-grid">
-      <div class="choice-card" onclick="startBooking()">
+      <div class="choice-card" onclick="startBookingFlow()">
         <div class="choice-icon">📅</div>
         <div class="choice-title">振替を予約</div>
         <div class="choice-desc">欠席分の振替を予約する</div>
       </div>
-      <div class="choice-card" onclick="startCancel()">
+      <div class="choice-card" onclick="startCancelFlow()">
         <div class="choice-icon">✖️</div>
         <div class="choice-title">振替をキャンセル</div>
         <div class="choice-desc">予約済みの振替を取消す</div>
@@ -349,14 +401,27 @@
     </div>
   </div>
 
+  <!-- STUDENT PICKER SCREEN -->
+  <div id="studentScreen" class="container hidden">
+    <div class="field">
+      <div class="field-label"><span class="icon">👥</span>生徒を選択<span class="required">必須</span></div>
+      <div id="studentPickerList"></div>
+    </div>
+    <button class="btn btn-secondary" onclick="showScreen('choiceScreen')">戻る</button>
+  </div>
+
   <!-- SELECT ABSENCE SCREEN -->
   <div id="absenceScreen" class="container hidden">
+    <div class="student-banner" id="absenceStudentBanner">
+      <div><span class="sb-name" id="absenceStudentName"></span></div>
+      <div class="sb-change" onclick="changeStudent()">生徒を変更</div>
+    </div>
     <div class="field">
       <div class="field-label"><span class="icon">📋</span>振替対象の欠席を選択<span class="required">必須</span></div>
       <div id="absenceList"></div>
     </div>
     <button class="btn btn-primary" onclick="absenceSelected()">次へ</button>
-    <button class="btn btn-secondary" onclick="showScreen('choiceScreen')">戻る</button>
+    <button class="btn btn-secondary" onclick="goBackFromAbsence()">戻る</button>
   </div>
 
   <!-- DATE LIST SCREEN -->
@@ -407,12 +472,16 @@
 
   <!-- CANCEL SCREEN -->
   <div id="cancelScreen" class="container hidden">
+    <div class="student-banner" id="cancelStudentBanner">
+      <div><span class="sb-name" id="cancelStudentName"></span></div>
+      <div class="sb-change" onclick="changeStudent()">生徒を変更</div>
+    </div>
     <div class="field">
       <div class="field-label"><span class="icon">📋</span>キャンセルする振替を選択</div>
       <div id="bookingList"></div>
     </div>
     <button class="btn btn-primary" onclick="confirmCancel()">キャンセルする</button>
-    <button class="btn btn-secondary" onclick="showScreen('choiceScreen')">戻る</button>
+    <button class="btn btn-secondary" onclick="goBackFromCancel()">戻る</button>
   </div>
 
   <!-- CONFIRM CANCEL SCREEN -->
@@ -468,6 +537,7 @@
     let absenceData = [];
     let bookingData = [];
     let dateListData = [];
+    let currentFlow = null; // 'book' or 'cancel'
 
     const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -492,7 +562,6 @@
         const data = await res.json();
         if (data.students && data.students.length > 0) {
           studentList = data.students;
-          if (studentList.length === 1) currentStudent = studentList[0];
           showScreen('choiceScreen');
         } else {
           showError('このLINEアカウントに紐づく生徒が見つかりません。');
@@ -502,10 +571,108 @@
       }
     }
 
-    async function startBooking() {
-      if (!currentStudent) currentStudent = studentList[0];
+    // ════════════════════════════════════════════════
+    // FLOW STARTERS
+    // ════════════════════════════════════════════════
+    function startBookingFlow() {
+      currentFlow = 'book';
+      currentStudent = null;
+      selectedAbsence = null;
+      selectedDate = null;
+      selectedSlot = null;
+
+      if (studentList.length === 1) {
+        currentStudent = studentList[0];
+        startBookingForStudent();
+      } else {
+        renderStudentPicker();
+        showScreen('studentScreen');
+      }
+    }
+
+    function startCancelFlow() {
+      currentFlow = 'cancel';
+      currentStudent = null;
+      selectedBooking = null;
+
+      if (studentList.length === 1) {
+        currentStudent = studentList[0];
+        startCancelForStudent();
+      } else {
+        renderStudentPicker();
+        showScreen('studentScreen');
+      }
+    }
+
+    function changeStudent() {
+      currentStudent = null;
+      renderStudentPicker();
+      showScreen('studentScreen');
+    }
+
+    function goBackFromAbsence() {
+      if (studentList.length > 1) {
+        showScreen('studentScreen');
+      } else {
+        showScreen('choiceScreen');
+      }
+    }
+
+    function goBackFromCancel() {
+      if (studentList.length > 1) {
+        showScreen('studentScreen');
+      } else {
+        showScreen('choiceScreen');
+      }
+    }
+
+    // ════════════════════════════════════════════════
+    // STUDENT PICKER
+    // ════════════════════════════════════════════════
+    function renderStudentPicker() {
+      const list = document.getElementById('studentPickerList');
+      list.innerHTML = '';
+
+      studentList.forEach(function(student, index) {
+        const div = document.createElement('div');
+        div.className = 'student-card';
+        div.onclick = function() { selectStudent(index); };
+        div.innerHTML =
+          '<div class="sc-avatar">👤</div>' +
+          '<div class="sc-info">' +
+            '<div class="sc-name">' + student.name + '</div>' +
+            '<div class="sc-class">' + (student.className || 'クラス未設定') + '</div>' +
+          '</div>' +
+          '<div class="sc-arrow">›</div>';
+        list.appendChild(div);
+      });
+    }
+
+    function selectStudent(index) {
+      currentStudent = studentList[index];
+      if (currentFlow === 'book') {
+        startBookingForStudent();
+      } else if (currentFlow === 'cancel') {
+        startCancelForStudent();
+      }
+    }
+
+    // ════════════════════════════════════════════════
+    // BOOKING FLOW (per student)
+    // ════════════════════════════════════════════════
+    async function startBookingForStudent() {
+      document.getElementById('absenceStudentName').textContent = currentStudent.name + '（' + (currentStudent.className || '') + '）';
+
+      // Hide change-student link if only one child
+      if (studentList.length === 1) {
+        document.querySelector('#absenceStudentBanner .sb-change').style.display = 'none';
+      } else {
+        document.querySelector('#absenceStudentBanner .sb-change').style.display = '';
+      }
+
       showScreen('absenceScreen');
       document.getElementById('absenceList').innerHTML = '<div style="text-align:center;padding:20px;"><div class="mini-loader"></div> 欠席データを読み込み中...</div>';
+
       try {
         const url = CONFIG.STUDENT_API + '?mode=absences&studentName=' + encodeURIComponent(currentStudent.name) + '&secret=' + encodeURIComponent(CONFIG.API_SECRET);
         const res = await fetch(url);
@@ -551,7 +718,6 @@
         alert('欠席を選択してください。');
         return;
       }
-      // Load upcoming dates
       showScreen('dateListScreen');
 
       const expD = new Date(selectedAbsence.expiry + 'T00:00:00');
@@ -607,7 +773,6 @@
 
     function selectDate(index) {
       selectedDate = dateListData[index];
-      const d = new Date(selectedDate.date + 'T00:00:00');
 
       document.getElementById('slotScreenTitle').textContent =
         selectedDate.displayDate + 'のクラス時間';
@@ -689,6 +854,9 @@
       }
     }
 
+    // ════════════════════════════════════════════════
+    // SPECIAL REQUEST
+    // ════════════════════════════════════════════════
     function showSpecialRequest() {
       document.getElementById('specialNote').value = '';
       showScreen('specialScreen');
@@ -721,10 +889,21 @@
       }
     }
 
-    async function startCancel() {
-      if (!currentStudent) currentStudent = studentList[0];
+    // ════════════════════════════════════════════════
+    // CANCEL FLOW (per student)
+    // ════════════════════════════════════════════════
+    async function startCancelForStudent() {
+      document.getElementById('cancelStudentName').textContent = currentStudent.name + '（' + (currentStudent.className || '') + '）';
+
+      if (studentList.length === 1) {
+        document.querySelector('#cancelStudentBanner .sb-change').style.display = 'none';
+      } else {
+        document.querySelector('#cancelStudentBanner .sb-change').style.display = '';
+      }
+
       showScreen('cancelScreen');
       document.getElementById('bookingList').innerHTML = '<div style="text-align:center;padding:20px;"><div class="mini-loader"></div> 予約データを読み込み中...</div>';
+
       try {
         const url = CONFIG.STUDENT_API + '?mode=bookings&studentName=' + encodeURIComponent(currentStudent.name) + '&secret=' + encodeURIComponent(CONFIG.API_SECRET);
         const res = await fetch(url);
@@ -821,7 +1000,7 @@
     }
 
     function showScreen(id) {
-      const screens = ['loading', 'choiceScreen', 'absenceScreen', 'dateListScreen', 'slotScreen', 'specialScreen', 'confirmScreen', 'cancelScreen', 'confirmCancelScreen', 'successScreen', 'errorScreen'];
+      const screens = ['loading', 'choiceScreen', 'studentScreen', 'absenceScreen', 'dateListScreen', 'slotScreen', 'specialScreen', 'confirmScreen', 'cancelScreen', 'confirmCancelScreen', 'successScreen', 'errorScreen'];
       screens.forEach(function(s) { document.getElementById(s).classList.add('hidden'); });
       document.getElementById(id).classList.remove('hidden');
     }
