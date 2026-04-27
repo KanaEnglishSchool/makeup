@@ -24,7 +24,6 @@
       --warning-bg: #FEF5E7;
       --shadow: 0 2px 12px rgba(0,0,0,0.06);
       --radius: 14px;
-      --disabled: #BDC3C7;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -83,40 +82,6 @@
       border-radius: 4px;
       font-weight: 500;
     }
-    select, input[type="date"] {
-      width: 100%;
-      padding: 12px 14px;
-      border: 2px solid var(--border);
-      border-radius: 10px;
-      font-family: 'Zen Maru Gothic', sans-serif;
-      font-size: 16px;
-      color: var(--text);
-      background: white;
-      appearance: none;
-      -webkit-appearance: none;
-      transition: border-color 0.2s;
-    }
-    select:focus, input[type="date"]:focus { outline: none; border-color: var(--primary); }
-    select {
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B6B6B' stroke-width='2' fill='none'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 14px center;
-      padding-right: 36px;
-    }
-    select.placeholder { color: var(--text-light); }
-    textarea {
-      width: 100%;
-      padding: 12px 14px;
-      border: 2px solid var(--border);
-      border-radius: 10px;
-      font-family: 'Zen Maru Gothic', sans-serif;
-      font-size: 16px;
-      color: var(--text);
-      background: white;
-      resize: none;
-      height: 70px;
-    }
-    textarea:focus { outline: none; border-color: var(--primary); }
     .btn {
       width: 100%;
       padding: 16px;
@@ -195,6 +160,42 @@
     .absence-option .ao-date { font-weight: 700; font-size: 15px; }
     .absence-option .ao-detail { font-size: 13px; color: var(--text-light); margin-top: 2px; }
     .absence-option .ao-expiry { font-size: 11px; color: var(--warning); margin-top: 4px; }
+
+    /* Date list cards */
+    .date-card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 8px;
+      border: 2px solid var(--border);
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .date-card:active, .date-card.selected {
+      border-color: var(--primary);
+      background: var(--primary-light);
+    }
+    .date-card.full {
+      opacity: 0.55;
+      cursor: not-allowed;
+      background: #f5f5f5;
+    }
+    .date-card .dc-date { font-weight: 700; font-size: 15px; }
+    .date-card .dc-classes { font-size: 11px; color: var(--text-light); margin-top: 2px; }
+    .date-card .dc-spots {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 12px;
+    }
+    .date-card .dc-spots.available { background: var(--success-bg); color: var(--success); }
+    .date-card .dc-spots.limited { background: var(--warning-bg); color: var(--warning); }
+    .date-card .dc-spots.full { background: var(--error-bg); color: var(--error); }
+
+    /* Time slot cards inside date selection */
     .slot-option {
       background: var(--card);
       border-radius: 10px;
@@ -222,6 +223,7 @@
     .slot-option .so-spots.available { color: var(--success); }
     .slot-option .so-spots.limited { color: var(--warning); }
     .slot-option .so-spots.none { color: var(--error); }
+
     .confirm-card {
       background: var(--card);
       border-radius: var(--radius);
@@ -298,8 +300,19 @@
       font-size: 14px;
     }
     .empty-state .empty-icon { font-size: 40px; margin-bottom: 12px; }
-    .field.error select, .field.error input { border-color: var(--error); }
-    .field-error-text { font-size: 12px; color: var(--error); margin-top: 6px; }
+    textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      font-family: 'Zen Maru Gothic', sans-serif;
+      font-size: 16px;
+      color: var(--text);
+      background: white;
+      resize: none;
+      height: 70px;
+    }
+    textarea:focus { outline: none; border-color: var(--primary); }
     .mini-loader {
       display: inline-block; width: 20px; height: 20px;
       border: 3px solid var(--border); border-top-color: var(--primary);
@@ -320,7 +333,7 @@
     <p>KANA English</p>
   </div>
 
-  <!-- ════════ CHOICE SCREEN ════════ -->
+  <!-- CHOICE SCREEN -->
   <div id="choiceScreen" class="container hidden">
     <div class="choice-grid">
       <div class="choice-card" onclick="startBooking()">
@@ -336,7 +349,7 @@
     </div>
   </div>
 
-  <!-- ════════ SELECT ABSENCE SCREEN ════════ -->
+  <!-- SELECT ABSENCE SCREEN -->
   <div id="absenceScreen" class="container hidden">
     <div class="field">
       <div class="field-label"><span class="icon">📋</span>振替対象の欠席を選択<span class="required">必須</span></div>
@@ -346,27 +359,27 @@
     <button class="btn btn-secondary" onclick="showScreen('choiceScreen')">戻る</button>
   </div>
 
-  <!-- ════════ SELECT DATE SCREEN ════════ -->
-  <div id="dateScreen" class="container hidden">
-    <div class="field" id="fieldMakeupDate">
-      <div class="field-label"><span class="icon">📅</span>振替希望日<span class="required">必須</span></div>
-      <div class="info-box" id="dateInfo"></div>
-      <input type="date" id="makeupDate" onchange="onDateSelected()">
-    </div>
-    <div id="slotContainer" class="hidden">
-      <div class="field">
-        <div class="field-label"><span class="icon">🕐</span>クラス時間<span class="required">必須</span></div>
-        <div id="slotList"></div>
-        <div id="slotLoading" class="hidden" style="text-align:center;padding:20px;">
-          <div class="mini-loader"></div> 空き状況を確認中...
-        </div>
-      </div>
+  <!-- DATE LIST SCREEN -->
+  <div id="dateListScreen" class="container hidden">
+    <div class="info-box" id="dateListInfo"></div>
+    <div class="field">
+      <div class="field-label"><span class="icon">📅</span>振替希望日を選択<span class="required">必須</span></div>
+      <div id="dateList"></div>
     </div>
     <button class="btn btn-special" onclick="showSpecialRequest()">別のクラスを希望する場合はこちら</button>
     <button class="btn btn-secondary" onclick="showScreen('absenceScreen')">戻る</button>
   </div>
 
-  <!-- ════════ SPECIAL REQUEST SCREEN ════════ -->
+  <!-- TIME SLOT SCREEN -->
+  <div id="slotScreen" class="container hidden">
+    <div class="field">
+      <div class="field-label"><span class="icon">🕐</span><span id="slotScreenTitle">時間を選択</span><span class="required">必須</span></div>
+      <div id="slotList"></div>
+    </div>
+    <button class="btn btn-secondary" onclick="showScreen('dateListScreen')">日付を変更する</button>
+  </div>
+
+  <!-- SPECIAL REQUEST SCREEN -->
   <div id="specialScreen" class="container hidden">
     <div class="field">
       <div class="field-label"><span class="icon">✉️</span>特別振替リクエスト</div>
@@ -374,40 +387,25 @@
       <textarea id="specialNote" placeholder="希望するクラスや時間帯など、ご要望をご記入ください"></textarea>
     </div>
     <button class="btn btn-primary" onclick="submitSpecialRequest()">スタッフにリクエストを送信</button>
-    <button class="btn btn-secondary" onclick="showScreen('dateScreen')">戻る</button>
+    <button class="btn btn-secondary" onclick="showScreen('dateListScreen')">戻る</button>
   </div>
 
-  <!-- ════════ CONFIRM BOOKING SCREEN ════════ -->
+  <!-- CONFIRM BOOKING SCREEN -->
   <div id="confirmScreen" class="container hidden">
     <div class="confirm-card">
       <h3>📋 以下の内容で振替を予約します</h3>
-      <div class="confirm-row">
-        <span class="label">生徒名</span>
-        <span class="value" id="confirmStudent"></span>
-      </div>
-      <div class="confirm-row">
-        <span class="label">元の欠席日</span>
-        <span class="value" id="confirmOriginal"></span>
-      </div>
-      <div class="confirm-row">
-        <span class="label">振替日</span>
-        <span class="value" id="confirmDate"></span>
-      </div>
-      <div class="confirm-row">
-        <span class="label">クラス時間</span>
-        <span class="value" id="confirmTime"></span>
-      </div>
-      <div class="confirm-row">
-        <span class="label">クラス名</span>
-        <span class="value" id="confirmClass"></span>
-      </div>
+      <div class="confirm-row"><span class="label">生徒名</span><span class="value" id="confirmStudent"></span></div>
+      <div class="confirm-row"><span class="label">元の欠席日</span><span class="value" id="confirmOriginal"></span></div>
+      <div class="confirm-row"><span class="label">振替日</span><span class="value" id="confirmDate"></span></div>
+      <div class="confirm-row"><span class="label">クラス時間</span><span class="value" id="confirmTime"></span></div>
+      <div class="confirm-row"><span class="label">クラス名</span><span class="value" id="confirmClass"></span></div>
     </div>
     <div class="info-box">予約確定後、キャンセルは振替日の24時間前まで可能です。</div>
     <button class="btn btn-primary" id="bookBtn" onclick="submitBooking()">この内容で予約する</button>
-    <button class="btn btn-secondary" onclick="showScreen('dateScreen')">修正する</button>
+    <button class="btn btn-secondary" onclick="showScreen('slotScreen')">修正する</button>
   </div>
 
-  <!-- ════════ CANCEL SCREEN ════════ -->
+  <!-- CANCEL SCREEN -->
   <div id="cancelScreen" class="container hidden">
     <div class="field">
       <div class="field-label"><span class="icon">📋</span>キャンセルする振替を選択</div>
@@ -417,29 +415,20 @@
     <button class="btn btn-secondary" onclick="showScreen('choiceScreen')">戻る</button>
   </div>
 
-  <!-- ════════ CONFIRM CANCEL SCREEN ════════ -->
+  <!-- CONFIRM CANCEL SCREEN -->
   <div id="confirmCancelScreen" class="container hidden">
     <div class="confirm-card">
       <h3>⚠️ 以下の振替をキャンセルしますか？</h3>
-      <div class="confirm-row">
-        <span class="label">生徒名</span>
-        <span class="value" id="cancelStudent"></span>
-      </div>
-      <div class="confirm-row">
-        <span class="label">振替日</span>
-        <span class="value" id="cancelDate"></span>
-      </div>
-      <div class="confirm-row">
-        <span class="label">クラス時間</span>
-        <span class="value" id="cancelTime"></span>
-      </div>
+      <div class="confirm-row"><span class="label">生徒名</span><span class="value" id="cancelStudent"></span></div>
+      <div class="confirm-row"><span class="label">振替日</span><span class="value" id="cancelDate"></span></div>
+      <div class="confirm-row"><span class="label">クラス時間</span><span class="value" id="cancelTime"></span></div>
     </div>
     <div class="info-box">キャンセル後、欠席分の振替は再予約可能です（期限内であれば）。</div>
     <button class="btn btn-primary" id="cancelBtn" onclick="submitCancel()">キャンセルを確定する</button>
     <button class="btn btn-secondary" onclick="showScreen('cancelScreen')">戻る</button>
   </div>
 
-  <!-- ════════ SUCCESS SCREEN ════════ -->
+  <!-- SUCCESS SCREEN -->
   <div id="successScreen" class="container hidden">
     <div class="success-screen">
       <div class="success-icon">✅</div>
@@ -450,7 +439,7 @@
     </div>
   </div>
 
-  <!-- ════════ ERROR SCREEN ════════ -->
+  <!-- ERROR SCREEN -->
   <div id="errorScreen" class="container hidden">
     <div class="status-message status-error" id="errorMessage">エラーが発生しました。</div>
     <button class="btn btn-primary" onclick="location.reload()">もう一度やり直す</button>
@@ -459,48 +448,39 @@
 
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
-    // ════════════════════════════════════════════════
-    // CONFIG
-    // ════════════════════════════════════════════════
     const CONFIG = {
-      LIFF_ID: '2009843493-NSN95lzH',
-      BOOKING_WEBHOOK: 'https://hook.eu1.make.com/hzo6l7awk6grn8cy68zsd908h56y3jm9',
+      LIFF_ID: 'PASTE_YOUR_MAKEUP_LIFF_ID_HERE',
+      BOOKING_WEBHOOK: 'PASTE_YOUR_MAKEUP_BOOKING_WEBHOOK_HERE',
       CANCEL_WEBHOOK: 'PASTE_YOUR_MAKEUP_CANCEL_WEBHOOK_HERE',
       SPECIAL_WEBHOOK: 'PASTE_YOUR_SPECIAL_REQUEST_WEBHOOK_HERE',
-      STUDENT_API: 'https://hook.eu1.make.com/5ccwg3jy3wnee5pizu3e6evn0zua6yrb',
+      STUDENT_API: 'PASTE_YOUR_STUDENT_LIST_MAKE_WEBHOOK_HERE',
       API_SECRET: '1234567890123456789012345678901234567890'
     };
-    // ════════════════════════════════════════════════
 
     let lineUserId = null;
     let lineDisplayName = null;
     let currentStudent = null;
     let studentList = [];
     let selectedAbsence = null;
+    let selectedDate = null;
     let selectedSlot = null;
     let selectedBooking = null;
     let absenceData = [];
     let bookingData = [];
+    let dateListData = [];
 
     const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 
-
-    // ════════════════════════════════════════════════
-    // INIT
-    // ════════════════════════════════════════════════
     async function initLiff() {
       try {
         await liff.init({ liffId: CONFIG.LIFF_ID });
         if (!liff.isLoggedIn()) { liff.login(); return; }
-
         const profile = await liff.getProfile();
         lineUserId = profile.userId;
         lineDisplayName = profile.displayName;
-
         await loadStudents();
-
       } catch (err) {
-        console.error('LIFF error:', err);
+        console.error(err);
         showError('LIFFの初期化に失敗しました。LINEアプリから開き直してください。');
       }
     }
@@ -510,68 +490,45 @@
         const url = CONFIG.STUDENT_API + '?mode=students&userId=' + encodeURIComponent(lineUserId) + '&secret=' + encodeURIComponent(CONFIG.API_SECRET);
         const res = await fetch(url);
         const data = await res.json();
-
         if (data.students && data.students.length > 0) {
           studentList = data.students;
-          if (studentList.length === 1) {
-            currentStudent = studentList[0];
-          }
+          if (studentList.length === 1) currentStudent = studentList[0];
           showScreen('choiceScreen');
         } else {
-          showError('このLINEアカウントに紐づく生徒が見つかりません。スタッフまでご連絡ください。');
+          showError('このLINEアカウントに紐づく生徒が見つかりません。');
         }
       } catch (err) {
-        console.error('Load students error:', err);
-        showError('生徒情報の読み込みに失敗しました。もう一度お試しください。');
+        showError('生徒情報の読み込みに失敗しました。');
       }
     }
 
-
-    // ════════════════════════════════════════════════
-    // BOOKING FLOW
-    // ════════════════════════════════════════════════
     async function startBooking() {
-      if (studentList.length > 1 && !currentStudent) {
-        // TODO: add student picker for multi-child families
-        currentStudent = studentList[0];
-      }
       if (!currentStudent) currentStudent = studentList[0];
-
-      // Load eligible absences
       showScreen('absenceScreen');
       document.getElementById('absenceList').innerHTML = '<div style="text-align:center;padding:20px;"><div class="mini-loader"></div> 欠席データを読み込み中...</div>';
-
       try {
         const url = CONFIG.STUDENT_API + '?mode=absences&studentName=' + encodeURIComponent(currentStudent.name) + '&secret=' + encodeURIComponent(CONFIG.API_SECRET);
         const res = await fetch(url);
         const data = await res.json();
-
         absenceData = data.absences || [];
-
         if (absenceData.length === 0) {
-          document.getElementById('absenceList').innerHTML =
-            '<div class="empty-state"><div class="empty-icon">📭</div>振替可能な欠席がありません。<br>欠席の期限が切れているか、すでに振替済みです。</div>';
+          document.getElementById('absenceList').innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div>振替可能な欠席がありません。</div>';
           return;
         }
-
         renderAbsences();
-
       } catch (err) {
-        console.error('Load absences error:', err);
-        document.getElementById('absenceList').innerHTML = '<div class="status-message status-error">欠席データの読み込みに失敗しました。</div>';
+        document.getElementById('absenceList').innerHTML = '<div class="status-message status-error">読み込みに失敗しました。</div>';
       }
     }
 
     function renderAbsences() {
       const list = document.getElementById('absenceList');
       list.innerHTML = '';
-
       absenceData.forEach(function(ab, index) {
-        var d = new Date(ab.date + 'T00:00:00');
-        var dayName = DAY_NAMES[d.getDay()];
-        var expD = new Date(ab.expiry + 'T00:00:00');
-
-        var div = document.createElement('div');
+        const d = new Date(ab.date + 'T00:00:00');
+        const dayName = DAY_NAMES[d.getDay()];
+        const expD = new Date(ab.expiry + 'T00:00:00');
+        const div = document.createElement('div');
         div.className = 'absence-option';
         div.setAttribute('data-index', index);
         div.onclick = function() { selectAbsence(index); };
@@ -589,163 +546,157 @@
       document.querySelector('[data-index="' + index + '"]').classList.add('selected');
     }
 
-    function absenceSelected() {
+    async function absenceSelected() {
       if (!selectedAbsence) {
         alert('欠席を選択してください。');
         return;
       }
-      // Set up date screen
-      var expiry = selectedAbsence.expiry;
-      var today = new Date();
-      var todayStr = formatYMD(today);
-      var tomorrow = new Date(today.getTime() + 86400000);
-      var tomorrowStr = formatYMD(tomorrow);
+      // Load upcoming dates
+      showScreen('dateListScreen');
 
-      var dateInput = document.getElementById('makeupDate');
-      dateInput.min = tomorrowStr; // at least tomorrow (need 24h before class)
-      dateInput.max = expiry;
-      dateInput.value = '';
+      const expD = new Date(selectedAbsence.expiry + 'T00:00:00');
+      document.getElementById('dateListInfo').innerHTML =
+        currentStudent.name + 'さん（' + currentStudent.className + '）の振替可能日です。<br>' +
+        '振替期限: ' + (expD.getMonth()+1) + '月' + expD.getDate() + '日まで';
 
-      var expD = new Date(expiry + 'T00:00:00');
-      document.getElementById('dateInfo').textContent =
-        currentStudent.name + 'さんの' + currentStudent.className + 'クラスの空き枠を表示します。振替期限: ' + (expD.getMonth()+1) + '月' + expD.getDate() + '日まで';
-
-      document.getElementById('slotContainer').classList.add('hidden');
-      selectedSlot = null;
-      showScreen('dateScreen');
-    }
-
-    async function onDateSelected() {
-      var dateStr = document.getElementById('makeupDate').value;
-      if (!dateStr) return;
-
-      selectedSlot = null;
-      var slotContainer = document.getElementById('slotContainer');
-      slotContainer.classList.remove('hidden');
-
-      var slotList = document.getElementById('slotList');
-      slotList.innerHTML = '';
-      document.getElementById('slotLoading').classList.remove('hidden');
+      document.getElementById('dateList').innerHTML = '<div style="text-align:center;padding:20px;"><div class="mini-loader"></div> 空き状況を確認中...</div>';
 
       try {
-        var url = CONFIG.STUDENT_API + '?mode=availability&date=' + encodeURIComponent(dateStr) + '&className=' + encodeURIComponent(currentStudent.className) + '&secret=' + encodeURIComponent(CONFIG.API_SECRET);
-        var res = await fetch(url);
-        var data = await res.json();
+        const url = CONFIG.STUDENT_API + '?mode=upcoming_dates&studentName=' + encodeURIComponent(currentStudent.name) + '&expiryDate=' + encodeURIComponent(selectedAbsence.expiry) + '&secret=' + encodeURIComponent(CONFIG.API_SECRET);
+        const res = await fetch(url);
+        const data = await res.json();
+        dateListData = data.dates || [];
 
-        document.getElementById('slotLoading').classList.add('hidden');
-
-        var slots = data.slots || [];
-
-        if (slots.length === 0) {
-          slotList.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div>この日に' + currentStudent.className + 'クラスの開講はありません。<br>別の日を選ぶか、下の特別リクエストをご利用ください。</div>';
+        if (dateListData.length === 0) {
+          document.getElementById('dateList').innerHTML =
+            '<div class="empty-state"><div class="empty-icon">📭</div>4週間以内に振替可能な日がありません。<br>下の「特別リクエスト」をご利用ください。</div>';
           return;
         }
-
-        slots.forEach(function(slot, index) {
-          var div = document.createElement('div');
-          var isFull = slot.available <= 0;
-
-          div.className = 'slot-option' + (isFull ? ' full' : '');
-          div.setAttribute('data-slot-index', index);
-
-          var spotsClass = 'available';
-          var spotsText = '残り' + slot.available + '席';
-          if (slot.available <= 2) { spotsClass = 'limited'; }
-          if (slot.available <= 0) { spotsClass = 'none'; spotsText = '定員に達しました'; }
-
-          div.innerHTML =
-            '<div><div class="so-time">' + slot.time + '</div><div class="so-class">' + slot.className + '</div></div>' +
-            '<div class="so-spots ' + spotsClass + '">' + spotsText + '</div>';
-
-          if (!isFull) {
-            div.onclick = function() { selectSlot(index, slot); };
-          }
-
-          slotList.appendChild(div);
-        });
-
+        renderDateList();
       } catch (err) {
-        console.error('Load slots error:', err);
-        document.getElementById('slotLoading').classList.add('hidden');
-        slotList.innerHTML = '<div class="status-message status-error">空き状況の確認に失敗しました。</div>';
+        document.getElementById('dateList').innerHTML = '<div class="status-message status-error">空き状況の確認に失敗しました。</div>';
       }
     }
 
-    function selectSlot(index, slot) {
-      selectedSlot = slot;
-      document.querySelectorAll('.slot-option').forEach(function(el) { el.classList.remove('selected'); });
-      document.querySelector('[data-slot-index="' + index + '"]').classList.add('selected');
+    function renderDateList() {
+      const list = document.getElementById('dateList');
+      list.innerHTML = '';
 
-      // Go straight to confirmation
+      dateListData.forEach(function(d, index) {
+        const div = document.createElement('div');
+        div.className = 'date-card' + (d.isFull ? ' full' : '');
+        div.setAttribute('data-date-index', index);
+
+        let spotsClass = 'available';
+        let spotsText = '残り' + d.totalAvailable + '席';
+        if (d.totalAvailable <= 2 && d.totalAvailable > 0) spotsClass = 'limited';
+        if (d.isFull) { spotsClass = 'full'; spotsText = '満席'; }
+
+        const classNames = d.slots.map(function(s) { return s.time; }).join(', ');
+
+        div.innerHTML =
+          '<div><div class="dc-date">' + d.displayDate + '</div><div class="dc-classes">' + classNames + '</div></div>' +
+          '<div class="dc-spots ' + spotsClass + '">' + spotsText + '</div>';
+
+        if (!d.isFull) {
+          div.onclick = function() { selectDate(index); };
+        }
+        list.appendChild(div);
+      });
+    }
+
+    function selectDate(index) {
+      selectedDate = dateListData[index];
+      const d = new Date(selectedDate.date + 'T00:00:00');
+
+      document.getElementById('slotScreenTitle').textContent =
+        selectedDate.displayDate + 'のクラス時間';
+
+      const slotList = document.getElementById('slotList');
+      slotList.innerHTML = '';
+
+      selectedDate.slots.forEach(function(slot, i) {
+        const div = document.createElement('div');
+        const isFull = slot.available <= 0;
+        div.className = 'slot-option' + (isFull ? ' full' : '');
+
+        let spotsClass = 'available';
+        let spotsText = '残り' + slot.available + '席';
+        if (slot.available <= 2) spotsClass = 'limited';
+        if (slot.available <= 0) { spotsClass = 'none'; spotsText = '定員'; }
+
+        div.innerHTML =
+          '<div><div class="so-time">' + slot.time + '</div><div class="so-class">' + slot.className + '</div></div>' +
+          '<div class="so-spots ' + spotsClass + '">' + spotsText + '</div>';
+
+        if (!isFull) {
+          div.onclick = function() { selectSlot(slot); };
+        }
+        slotList.appendChild(div);
+      });
+
+      showScreen('slotScreen');
+    }
+
+    function selectSlot(slot) {
+      selectedSlot = slot;
       showBookingConfirmation();
     }
 
     function showBookingConfirmation() {
-      var makeupDate = document.getElementById('makeupDate').value;
-      var d = new Date(makeupDate + 'T00:00:00');
-      var origD = new Date(selectedAbsence.date + 'T00:00:00');
-
+      const d = new Date(selectedDate.date + 'T00:00:00');
+      const origD = new Date(selectedAbsence.date + 'T00:00:00');
       document.getElementById('confirmStudent').textContent = currentStudent.name;
       document.getElementById('confirmOriginal').textContent = (origD.getMonth()+1) + '月' + origD.getDate() + '日（' + DAY_NAMES[origD.getDay()] + '）' + selectedAbsence.classTime;
       document.getElementById('confirmDate').textContent = (d.getMonth()+1) + '月' + d.getDate() + '日（' + DAY_NAMES[d.getDay()] + '）';
       document.getElementById('confirmTime').textContent = selectedSlot.time;
       document.getElementById('confirmClass').textContent = selectedSlot.className;
-
       showScreen('confirmScreen');
     }
 
     async function submitBooking() {
-      var btn = document.getElementById('bookBtn');
+      const btn = document.getElementById('bookBtn');
       btn.disabled = true;
       btn.textContent = '予約中...';
-
-      var payload = {
+      const payload = {
         lineUserId: lineUserId,
         lineDisplayName: lineDisplayName,
         studentName: currentStudent.name,
         className: currentStudent.className,
-        makeupDate: document.getElementById('makeupDate').value,
+        makeupDate: selectedDate.date,
         makeupTime: selectedSlot.time,
         makeupClassName: selectedSlot.className,
         originalAbsenceDate: selectedAbsence.date,
         originalAbsenceRow: selectedAbsence.row,
         submittedAt: new Date().toISOString()
       };
-
       try {
-        var res = await fetch(CONFIG.BOOKING_WEBHOOK, {
+        const res = await fetch(CONFIG.BOOKING_WEBHOOK, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-
         if (res.ok) {
           document.getElementById('successTitle').textContent = '予約完了';
           document.getElementById('successMessage').textContent =
             currentStudent.name + 'さんの振替を予約しました。\n当日はお忘れなくお越しください。';
           showScreen('successScreen');
         } else {
-          throw new Error('Server error ' + res.status);
+          throw new Error('Server error');
         }
       } catch (err) {
-        console.error('Booking error:', err);
         showError('予約に失敗しました。もう一度お試しください。');
       }
     }
 
-
-    // ════════════════════════════════════════════════
-    // SPECIAL REQUEST FLOW
-    // ════════════════════════════════════════════════
     function showSpecialRequest() {
       document.getElementById('specialNote').value = '';
       showScreen('specialScreen');
     }
 
     async function submitSpecialRequest() {
-      var note = document.getElementById('specialNote').value.trim();
-
-      var payload = {
+      const note = document.getElementById('specialNote').value.trim();
+      const payload = {
         lineUserId: lineUserId,
         lineDisplayName: lineDisplayName,
         studentName: currentStudent.name,
@@ -754,64 +705,48 @@
         note: note || '（備考なし）',
         submittedAt: new Date().toISOString()
       };
-
       try {
-        var res = await fetch(CONFIG.SPECIAL_WEBHOOK, {
+        const res = await fetch(CONFIG.SPECIAL_WEBHOOK, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-
         if (res.ok) {
           document.getElementById('successTitle').textContent = 'リクエスト送信完了';
-          document.getElementById('successMessage').textContent =
-            'スタッフにリクエストを送信しました。確認後ご連絡いたします。';
+          document.getElementById('successMessage').textContent = 'スタッフにリクエストを送信しました。';
           showScreen('successScreen');
-        } else {
-          throw new Error('Server error');
-        }
+        } else { throw new Error(); }
       } catch (err) {
         showError('リクエストの送信に失敗しました。');
       }
     }
 
-
-    // ════════════════════════════════════════════════
-    // CANCEL FLOW
-    // ════════════════════════════════════════════════
     async function startCancel() {
       if (!currentStudent) currentStudent = studentList[0];
-
       showScreen('cancelScreen');
       document.getElementById('bookingList').innerHTML = '<div style="text-align:center;padding:20px;"><div class="mini-loader"></div> 予約データを読み込み中...</div>';
-
       try {
-        var url = CONFIG.STUDENT_API + '?mode=bookings&studentName=' + encodeURIComponent(currentStudent.name) + '&secret=' + encodeURIComponent(CONFIG.API_SECRET);
-        var res = await fetch(url);
-        var data = await res.json();
-
+        const url = CONFIG.STUDENT_API + '?mode=bookings&studentName=' + encodeURIComponent(currentStudent.name) + '&secret=' + encodeURIComponent(CONFIG.API_SECRET);
+        const res = await fetch(url);
+        const data = await res.json();
         bookingData = data.bookings || [];
-
         if (bookingData.length === 0) {
           document.getElementById('bookingList').innerHTML =
-            '<div class="empty-state"><div class="empty-icon">📭</div>キャンセル可能な振替予約はありません。<br>（振替日の24時間前を過ぎた予約はキャンセルできません）</div>';
+            '<div class="empty-state"><div class="empty-icon">📭</div>キャンセル可能な振替予約はありません。<br>（24時間前を過ぎた予約はキャンセル不可）</div>';
           return;
         }
-
         renderBookings();
-
       } catch (err) {
-        document.getElementById('bookingList').innerHTML = '<div class="status-message status-error">予約データの読み込みに失敗しました。</div>';
+        document.getElementById('bookingList').innerHTML = '<div class="status-message status-error">読み込みに失敗しました。</div>';
       }
     }
 
     function renderBookings() {
-      var list = document.getElementById('bookingList');
+      const list = document.getElementById('bookingList');
       list.innerHTML = '';
-
       bookingData.forEach(function(bk, index) {
-        var d = new Date(bk.date + 'T00:00:00');
-        var div = document.createElement('div');
+        const d = new Date(bk.date + 'T00:00:00');
+        const div = document.createElement('div');
         div.className = 'absence-option';
         div.setAttribute('data-bk-index', index);
         div.onclick = function() { selectBooking(index); };
@@ -833,7 +768,7 @@
         alert('キャンセルする振替を選択してください。');
         return;
       }
-      var d = new Date(selectedBooking.date + 'T00:00:00');
+      const d = new Date(selectedBooking.date + 'T00:00:00');
       document.getElementById('cancelStudent').textContent = currentStudent.name;
       document.getElementById('cancelDate').textContent = (d.getMonth()+1) + '月' + d.getDate() + '日（' + DAY_NAMES[d.getDay()] + '）';
       document.getElementById('cancelTime').textContent = selectedBooking.classTime;
@@ -841,11 +776,10 @@
     }
 
     async function submitCancel() {
-      var btn = document.getElementById('cancelBtn');
+      const btn = document.getElementById('cancelBtn');
       btn.disabled = true;
       btn.textContent = 'キャンセル中...';
-
-      var payload = {
+      const payload = {
         lineUserId: lineUserId,
         lineDisplayName: lineDisplayName,
         studentName: currentStudent.name,
@@ -855,36 +789,20 @@
         originalAbsenceDate: selectedBooking.originalAbsence,
         submittedAt: new Date().toISOString()
       };
-
       try {
-        var res = await fetch(CONFIG.CANCEL_WEBHOOK, {
+        const res = await fetch(CONFIG.CANCEL_WEBHOOK, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-
         if (res.ok) {
           document.getElementById('successTitle').textContent = 'キャンセル完了';
-          document.getElementById('successMessage').textContent =
-            '振替をキャンセルしました。欠席分の振替は期限内であれば再予約可能です。';
+          document.getElementById('successMessage').textContent = '振替をキャンセルしました。期限内であれば再予約可能です。';
           showScreen('successScreen');
-        } else {
-          throw new Error('Server error');
-        }
+        } else { throw new Error(); }
       } catch (err) {
-        showError('キャンセルに失敗しました。もう一度お試しください。');
+        showError('キャンセルに失敗しました。');
       }
-    }
-
-
-    // ════════════════════════════════════════════════
-    // UTILITIES
-    // ════════════════════════════════════════════════
-    function formatYMD(date) {
-      var y = date.getFullYear();
-      var m = String(date.getMonth() + 1).padStart(2, '0');
-      var d = String(date.getDate()).padStart(2, '0');
-      return y + '-' + m + '-' + d;
     }
 
     function showError(msg) {
@@ -894,15 +812,16 @@
 
     function closeLiff() {
       try {
-        if (liff.isInClient()) { liff.closeWindow(); } else { window.close(); }
-      } catch (err) { console.error('Close error:', err); }
+        if (liff.isInClient()) liff.closeWindow();
+        else window.close();
+      } catch (err) {}
       setTimeout(function() {
         document.getElementById('closeMessage').classList.remove('hidden');
       }, 500);
     }
 
     function showScreen(id) {
-      var screens = ['loading', 'choiceScreen', 'absenceScreen', 'dateScreen', 'specialScreen', 'confirmScreen', 'cancelScreen', 'confirmCancelScreen', 'successScreen', 'errorScreen'];
+      const screens = ['loading', 'choiceScreen', 'absenceScreen', 'dateListScreen', 'slotScreen', 'specialScreen', 'confirmScreen', 'cancelScreen', 'confirmCancelScreen', 'successScreen', 'errorScreen'];
       screens.forEach(function(s) { document.getElementById(s).classList.add('hidden'); });
       document.getElementById(id).classList.remove('hidden');
     }
