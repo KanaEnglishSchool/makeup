@@ -548,9 +548,13 @@
         const profile = await liff.getProfile();
         lineUserId = profile.userId;
         lineDisplayName = profile.displayName;
+        
+        alert('DEBUG: userId=' + lineUserId + ', LIFF_ID=' + CONFIG.LIFF_ID);
+        
         await loadStudents();
       } catch (err) {
         console.error(err);
+        alert('DEBUG ERROR: ' + err.message + ' | stack: ' + (err.stack || 'none'));
         showError('LIFFの初期化に失敗しました。LINEアプリから開き直してください。');
       }
     }
@@ -558,8 +562,14 @@
     async function loadStudents() {
       try {
         const url = CONFIG.STUDENT_API + '?mode=students&userId=' + encodeURIComponent(lineUserId) + '&secret=' + encodeURIComponent(CONFIG.API_SECRET);
+        
+        alert('DEBUG: fetching ' + url);
+        
         const res = await fetch(url);
         const data = await res.json();
+        
+        alert('DEBUG: got ' + JSON.stringify(data));
+        
         if (data.students && data.students.length > 0) {
           studentList = data.students;
           showScreen('choiceScreen');
@@ -567,6 +577,7 @@
           showError('このLINEアカウントに紐づく生徒が見つかりません。');
         }
       } catch (err) {
+        alert('DEBUG fetch error: ' + err.message);
         showError('生徒情報の読み込みに失敗しました。');
       }
     }
