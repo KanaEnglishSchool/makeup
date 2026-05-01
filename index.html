@@ -560,6 +560,11 @@
         const url = CONFIG.STUDENT_API + '?mode=students&userId=' + encodeURIComponent(lineUserId) + '&secret=' + encodeURIComponent(CONFIG.API_SECRET);
         const res = await fetch(url);
         const data = await res.json();
+        studentList = data.students.filter(s => !s.isAdult);
+          if (studentList.length === 0) {
+            showError('お子様の登録がありません。\n大人レッスンの方は別メニューをご利用ください。');
+            return;
+          }
         if (data.students && data.students.length > 0) {
           studentList = data.students;
           showScreen('choiceScreen');
