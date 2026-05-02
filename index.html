@@ -548,7 +548,7 @@
         const profile = await liff.getProfile();
         lineUserId = profile.userId;
         lineDisplayName = profile.displayName;
-        await ();
+        await loadStudents();
       } 
         catch (err) {
         console.error(err);
