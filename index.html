@@ -549,7 +549,8 @@
         lineUserId = profile.userId;
         lineDisplayName = profile.displayName;
         await ();
-      } catch (err) {
+      } 
+        catch (err) {
         console.error(err);
         showError('LIFFの初期化に失敗しました。LINEアプリから開き直してください。');
       }
