@@ -145,7 +145,6 @@
     .choice-card .choice-title { font-size: 15px; font-weight: 700; color: var(--primary-dark); }
     .choice-card .choice-desc { font-size: 12px; color: var(--text-light); margin-top: 4px; }
 
-    /* Student picker cards */
     .student-card {
       background: var(--card);
       border-radius: 12px;
@@ -519,10 +518,18 @@
   <script>
     const CONFIG = {
       LIFF_ID: '2009843493-NSN95lzH',
+
+      // READS go straight to Apps Script. Make is no longer in the read
+      // path. Must stay a plain GET with no custom headers, otherwise a
+      // CORS preflight fires that Apps Script cannot answer.
+      SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzb3aX4UmvbifSMmRR1NGCuUuDF_AkghJ03jti-V7vO2vK_8UPtDbTPb1tQZu5J288m/exec',
+
+      // WRITES still go to Make, which sends the LINE confirmation and
+      // the staff email after a booking, cancellation or special request.
       BOOKING_WEBHOOK: 'https://hook.eu1.make.com/hzo6l7awk6grn8cy68zsd908h56y3jm9',
       CANCEL_WEBHOOK: 'https://hook.eu1.make.com/ps5o8grjljex48tdbf104r1jcpu8a5kv',
       SPECIAL_WEBHOOK: 'https://hook.eu1.make.com/2dmq1balixq3r3dyk4k3jhvwyijqobpz',
-      STUDENT_API: 'https://hook.eu1.make.com/5ccwg3jy3wnee5pizu3e6evn0zua6yrb',
+
       API_SECRET: '1234567890123456789012345678901234567890'
     };
 
@@ -538,6 +545,8 @@
     let bookingData = [];
     let dateListData = [];
     let currentFlow = null; // 'book' or 'cancel'
+    let detailByName = {};  // studentName -> { absences: [], bookings: [] }
+    let holidaysList = [];
 
     const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -549,34 +558,76 @@
         lineUserId = profile.userId;
         lineDisplayName = profile.displayName;
         await loadStudents();
-      } 
-        catch (err) {
+      } catch (err) {
         console.error(err);
         showError('LIFFの初期化に失敗しました。LINEアプリから開き直してください。');
       }
     }
 
+    // ── Networking ──────────────────────────────────────────
+    function apiUrl(params) {
+      let url = CONFIG.SCRIPT_URL + '?secret=' + encodeURIComponent(CONFIG.API_SECRET);
+      Object.keys(params).forEach(function(k) {
+        if (params[k] === null || params[k] === undefined || params[k] === '') return;
+        url += '&' + k + '=' + encodeURIComponent(params[k]);
+      });
+      return url;
+    }
+
+    // Retries transient failures so a single hiccup doesn't surface to
+    // the parent as "your child wasn't found".
+    async function apiGet(params, attempts) {
+      attempts = attempts || 3;
+      let lastErr = null;
+      for (let i = 0; i < attempts; i++) {
+        try {
+          const res = await fetch(apiUrl(params));
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const text = await res.text();
+          if (text.trim().charAt(0) === '<') throw new Error('non-JSON response');
+          return JSON.parse(text);
+        } catch (e) {
+          lastErr = e;
+          if (i < attempts - 1) {
+            await new Promise(function(r) { setTimeout(r, 1000 * (i + 1)); });
+          }
+        }
+      }
+      throw lastErr;
+    }
+
+    // ONE request replaces the previous three (students, then absences
+    // per child, then bookings per child). Everything both flows need
+    // arrives together, so picking a child and opening either list now
+    // involves no network call at all.
     async function loadStudents() {
       try {
-        const url = CONFIG.STUDENT_API + '?mode=students&userId=' + encodeURIComponent(lineUserId) + '&secret=' + encodeURIComponent(CONFIG.API_SECRET);
-        const res = await fetch(url);
-        const data = await res.json();
-        if (!data.students || data.students.length === 0) {
-          showError('このLINEアカウントに紐づく生徒が見つかりません。');
+        const data = await apiGet({ mode: 'bootstrap_kids', userId: lineUserId });
+
+        if (!data.found) {
+          showError(data.message || '生徒情報が見つかりませんでした。');
           return;
         }
-        
-        // Filter out adult students
-        studentList = data.students.filter(s => !s.isAdult);
-        
+
+        studentList = data.students || [];
+        holidaysList = data.holidays || [];
+
+        detailByName = {};
+        (data.detail || []).forEach(function(d) {
+          detailByName[d.student.name] = {
+            absences: d.absences || [],
+            bookings: d.bookings || []
+          };
+        });
+
         if (studentList.length === 0) {
           showError('お子様の登録がありません。\n大人レッスンの方は別メニューをご利用ください。');
           return;
         }
-        
+
         showScreen('choiceScreen');
       } catch (err) {
-        showError('生徒情報の読み込みに失敗しました。');
+        showError('情報の読み込みに失敗しました。電波状況をご確認のうえ、もう一度お試しください。');
       }
     }
 
@@ -620,29 +671,31 @@
     }
 
     function goBackFromAbsence() {
-      if (studentList.length > 1) {
-        showScreen('studentScreen');
-      } else {
-        showScreen('choiceScreen');
-      }
+      if (studentList.length > 1) showScreen('studentScreen');
+      else showScreen('choiceScreen');
     }
 
     function goBackFromCancel() {
-      if (studentList.length > 1) {
-        showScreen('studentScreen');
-      } else {
-        showScreen('choiceScreen');
-      }
+      if (studentList.length > 1) showScreen('studentScreen');
+      else showScreen('choiceScreen');
     }
 
     // ════════════════════════════════════════════════
     // STUDENT PICKER
     // ════════════════════════════════════════════════
+    // Now shows each child's count up front, because the bootstrap
+    // already told us how many absences or bookings each one has.
     function renderStudentPicker() {
       const list = document.getElementById('studentPickerList');
       list.innerHTML = '';
 
       studentList.forEach(function(student, index) {
+        const detail = detailByName[student.name] || { absences: [], bookings: [] };
+        const count = currentFlow === 'cancel' ? detail.bookings.length : detail.absences.length;
+        const label = currentFlow === 'cancel'
+          ? (count > 0 ? '振替予約 ' + count + '件' : '予約なし')
+          : (count > 0 ? '振替可能 ' + count + '件' : '振替可能な欠席なし');
+
         const div = document.createElement('div');
         div.className = 'student-card';
         div.onclick = function() { selectStudent(index); };
@@ -650,7 +703,7 @@
           '<div class="sc-avatar">👤</div>' +
           '<div class="sc-info">' +
             '<div class="sc-name">' + student.name + '</div>' +
-            '<div class="sc-class">' + (student.className || 'クラス未設定') + '</div>' +
+            '<div class="sc-class">' + (student.className || 'クラス未設定') + ' ・ ' + label + '</div>' +
           '</div>' +
           '<div class="sc-arrow">›</div>';
         list.appendChild(div);
@@ -659,20 +712,18 @@
 
     function selectStudent(index) {
       currentStudent = studentList[index];
-      if (currentFlow === 'book') {
-        startBookingForStudent();
-      } else if (currentFlow === 'cancel') {
-        startCancelForStudent();
-      }
+      if (currentFlow === 'book') startBookingForStudent();
+      else if (currentFlow === 'cancel') startCancelForStudent();
     }
 
     // ════════════════════════════════════════════════
     // BOOKING FLOW (per student)
     // ════════════════════════════════════════════════
-    async function startBookingForStudent() {
-      document.getElementById('absenceStudentName').textContent = currentStudent.name + '（' + (currentStudent.className || '') + '）';
+    // No network call: absences arrived with the bootstrap.
+    function startBookingForStudent() {
+      document.getElementById('absenceStudentName').textContent =
+        currentStudent.name + '（' + (currentStudent.className || '') + '）';
 
-      // Hide change-student link if only one child
       if (studentList.length === 1) {
         document.querySelector('#absenceStudentBanner .sb-change').style.display = 'none';
       } else {
@@ -680,21 +731,17 @@
       }
 
       showScreen('absenceScreen');
-      document.getElementById('absenceList').innerHTML = '<div style="text-align:center;padding:20px;"><div class="mini-loader"></div> 欠席データを読み込み中...</div>';
 
-      try {
-        const url = CONFIG.STUDENT_API + '?mode=absences&studentName=' + encodeURIComponent(currentStudent.name) + '&secret=' + encodeURIComponent(CONFIG.API_SECRET);
-        const res = await fetch(url);
-        const data = await res.json();
-        absenceData = data.absences || [];
-        if (absenceData.length === 0) {
-          document.getElementById('absenceList').innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div>振替可能な欠席がありません。</div>';
-          return;
-        }
-        renderAbsences();
-      } catch (err) {
-        document.getElementById('absenceList').innerHTML = '<div class="status-message status-error">読み込みに失敗しました。</div>';
+      const detail = detailByName[currentStudent.name] || { absences: [] };
+      absenceData = detail.absences;
+      selectedAbsence = null;
+
+      if (absenceData.length === 0) {
+        document.getElementById('absenceList').innerHTML =
+          '<div class="empty-state"><div class="empty-icon">📭</div>振替可能な欠席がありません。</div>';
+        return;
       }
+      renderAbsences();
     }
 
     function renderAbsences() {
@@ -718,8 +765,9 @@
 
     function selectAbsence(index) {
       selectedAbsence = absenceData[index];
-      document.querySelectorAll('.absence-option').forEach(function(el) { el.classList.remove('selected'); });
-      document.querySelector('[data-index="' + index + '"]').classList.add('selected');
+      document.querySelectorAll('#absenceList .absence-option').forEach(function(el) { el.classList.remove('selected'); });
+      const el = document.querySelector('#absenceList [data-index="' + index + '"]');
+      if (el) el.classList.add('selected');
     }
 
     async function absenceSelected() {
@@ -734,22 +782,26 @@
         currentStudent.name + 'さん（' + currentStudent.className + '）の振替可能日です。<br>' +
         '振替期限: ' + (expD.getMonth()+1) + '月' + expD.getDate() + '日まで';
 
-      document.getElementById('dateList').innerHTML = '<div style="text-align:center;padding:20px;"><div class="mini-loader"></div> 空き状況を確認中...</div>';
+      document.getElementById('dateList').innerHTML =
+        '<div style="text-align:center;padding:20px;"><div class="mini-loader"></div> 空き状況を確認中...</div>';
 
       try {
-        const url = CONFIG.STUDENT_API + '?mode=upcoming_dates&studentName=' + encodeURIComponent(currentStudent.name) + '&expiryDate=' + encodeURIComponent(selectedAbsence.expiry) + '&secret=' + encodeURIComponent(CONFIG.API_SECRET);
-        const res = await fetch(url);
-        const data = await res.json();
+        const data = await apiGet({
+          mode: 'upcoming_dates',
+          studentName: currentStudent.name,
+          expiryDate: selectedAbsence.expiry
+        });
         dateListData = data.dates || [];
 
         if (dateListData.length === 0) {
           document.getElementById('dateList').innerHTML =
-            '<div class="empty-state"><div class="empty-icon">📭</div>4週間以内に振替可能な日がありません。<br>下の「特別リクエスト」をご利用ください。</div>';
+            '<div class="empty-state"><div class="empty-icon">📭</div>6週間以内に振替可能な日がありません。<br>下の「特別リクエスト」をご利用ください。</div>';
           return;
         }
         renderDateList();
       } catch (err) {
-        document.getElementById('dateList').innerHTML = '<div class="status-message status-error">空き状況の確認に失敗しました。</div>';
+        document.getElementById('dateList').innerHTML =
+          '<div class="status-message status-error">空き状況の確認に失敗しました。もう一度お試しください。</div>';
       }
     }
 
@@ -773,9 +825,7 @@
           '<div><div class="dc-date">' + d.displayDate + '</div><div class="dc-classes">' + classNames + '</div></div>' +
           '<div class="dc-spots ' + spotsClass + '">' + spotsText + '</div>';
 
-        if (!d.isFull) {
-          div.onclick = function() { selectDate(index); };
-        }
+        if (!d.isFull) div.onclick = function() { selectDate(index); };
         list.appendChild(div);
       });
     }
@@ -789,7 +839,7 @@
       const slotList = document.getElementById('slotList');
       slotList.innerHTML = '';
 
-      selectedDate.slots.forEach(function(slot, i) {
+      selectedDate.slots.forEach(function(slot) {
         const div = document.createElement('div');
         const isFull = slot.available <= 0;
         div.className = 'slot-option' + (isFull ? ' full' : '');
@@ -803,9 +853,7 @@
           '<div><div class="so-time">' + slot.time + '</div><div class="so-class">' + slot.className + '</div></div>' +
           '<div class="so-spots ' + spotsClass + '">' + spotsText + '</div>';
 
-        if (!isFull) {
-          div.onclick = function() { selectSlot(slot); };
-        }
+        if (!isFull) div.onclick = function() { selectSlot(slot); };
         slotList.appendChild(div);
       });
 
@@ -821,8 +869,10 @@
       const d = new Date(selectedDate.date + 'T00:00:00');
       const origD = new Date(selectedAbsence.date + 'T00:00:00');
       document.getElementById('confirmStudent').textContent = currentStudent.name;
-      document.getElementById('confirmOriginal').textContent = (origD.getMonth()+1) + '月' + origD.getDate() + '日（' + DAY_NAMES[origD.getDay()] + '）' + selectedAbsence.classTime;
-      document.getElementById('confirmDate').textContent = (d.getMonth()+1) + '月' + d.getDate() + '日（' + DAY_NAMES[d.getDay()] + '）';
+      document.getElementById('confirmOriginal').textContent =
+        (origD.getMonth()+1) + '月' + origD.getDate() + '日（' + DAY_NAMES[origD.getDay()] + '）' + selectedAbsence.classTime;
+      document.getElementById('confirmDate').textContent =
+        (d.getMonth()+1) + '月' + d.getDate() + '日（' + DAY_NAMES[d.getDay()] + '）';
       document.getElementById('confirmTime').textContent = selectedSlot.time;
       document.getElementById('confirmClass').textContent = selectedSlot.className;
       showScreen('confirmScreen');
@@ -850,15 +900,14 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        if (res.ok) {
-          document.getElementById('successTitle').textContent = '予約完了';
-          document.getElementById('successMessage').textContent =
-            currentStudent.name + 'さんの振替を予約しました。\n当日はお忘れなくお越しください。';
-          showScreen('successScreen');
-        } else {
-          throw new Error('Server error');
-        }
+        if (!res.ok) throw new Error('Server error');
+        document.getElementById('successTitle').textContent = '予約完了';
+        document.getElementById('successMessage').textContent =
+          currentStudent.name + 'さんの振替を予約しました。\n当日はお忘れなくお越しください。';
+        showScreen('successScreen');
       } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'この内容で予約する';
         showError('予約に失敗しました。もう一度お試しください。');
       }
     }
@@ -888,11 +937,10 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        if (res.ok) {
-          document.getElementById('successTitle').textContent = 'リクエスト送信完了';
-          document.getElementById('successMessage').textContent = 'スタッフにリクエストを送信しました。';
-          showScreen('successScreen');
-        } else { throw new Error(); }
+        if (!res.ok) throw new Error();
+        document.getElementById('successTitle').textContent = 'リクエスト送信完了';
+        document.getElementById('successMessage').textContent = 'スタッフにリクエストを送信しました。';
+        showScreen('successScreen');
       } catch (err) {
         showError('リクエストの送信に失敗しました。');
       }
@@ -901,8 +949,11 @@
     // ════════════════════════════════════════════════
     // CANCEL FLOW (per student)
     // ════════════════════════════════════════════════
-    async function startCancelForStudent() {
-      document.getElementById('cancelStudentName').textContent = currentStudent.name + '（' + (currentStudent.className || '') + '）';
+    // No network call: bookings arrived with the bootstrap. A quiet
+    // background refresh follows in case something changed since load.
+    function startCancelForStudent() {
+      document.getElementById('cancelStudentName').textContent =
+        currentStudent.name + '（' + (currentStudent.className || '') + '）';
 
       if (studentList.length === 1) {
         document.querySelector('#cancelStudentBanner .sb-change').style.display = 'none';
@@ -911,21 +962,37 @@
       }
 
       showScreen('cancelScreen');
-      document.getElementById('bookingList').innerHTML = '<div style="text-align:center;padding:20px;"><div class="mini-loader"></div> 予約データを読み込み中...</div>';
+      selectedBooking = null;
 
-      try {
-        const url = CONFIG.STUDENT_API + '?mode=bookings&studentName=' + encodeURIComponent(currentStudent.name) + '&secret=' + encodeURIComponent(CONFIG.API_SECRET);
-        const res = await fetch(url);
-        const data = await res.json();
-        bookingData = data.bookings || [];
-        if (bookingData.length === 0) {
-          document.getElementById('bookingList').innerHTML =
-            '<div class="empty-state"><div class="empty-icon">📭</div>キャンセル可能な振替予約はありません。<br>（24時間前を過ぎた予約はキャンセル不可）</div>';
-          return;
-        }
+      const detail = detailByName[currentStudent.name] || { bookings: [] };
+      bookingData = detail.bookings;
+      paintBookingList();
+
+      refreshBookingsQuietly();
+    }
+
+    function paintBookingList() {
+      if (bookingData.length === 0) {
+        document.getElementById('bookingList').innerHTML =
+          '<div class="empty-state"><div class="empty-icon">📭</div>キャンセル可能な振替予約はありません。<br>（24時間前を過ぎた予約はキャンセル不可）</div>';
+      } else {
         renderBookings();
+      }
+    }
+
+    async function refreshBookingsQuietly() {
+      const forStudent = currentStudent.name;
+      try {
+        const data = await apiGet({ mode: 'bookings', studentName: forStudent }, 2);
+        if (!currentStudent || currentStudent.name !== forStudent) return;
+        bookingData = data.bookings || [];
+        if (detailByName[forStudent]) detailByName[forStudent].bookings = bookingData;
+        if (!document.getElementById('cancelScreen').classList.contains('hidden')) {
+          selectedBooking = null;
+          paintBookingList();
+        }
       } catch (err) {
-        document.getElementById('bookingList').innerHTML = '<div class="status-message status-error">読み込みに失敗しました。</div>';
+        // The list already shown from bootstrap data stays usable.
       }
     }
 
@@ -948,7 +1015,8 @@
     function selectBooking(index) {
       selectedBooking = bookingData[index];
       document.querySelectorAll('#bookingList .absence-option').forEach(function(el) { el.classList.remove('selected'); });
-      document.querySelector('[data-bk-index="' + index + '"]').classList.add('selected');
+      const el = document.querySelector('#bookingList [data-bk-index="' + index + '"]');
+      if (el) el.classList.add('selected');
     }
 
     function confirmCancel() {
@@ -958,7 +1026,8 @@
       }
       const d = new Date(selectedBooking.date + 'T00:00:00');
       document.getElementById('cancelStudent').textContent = currentStudent.name;
-      document.getElementById('cancelDate').textContent = (d.getMonth()+1) + '月' + d.getDate() + '日（' + DAY_NAMES[d.getDay()] + '）';
+      document.getElementById('cancelDate').textContent =
+        (d.getMonth()+1) + '月' + d.getDate() + '日（' + DAY_NAMES[d.getDay()] + '）';
       document.getElementById('cancelTime').textContent = selectedBooking.classTime;
       showScreen('confirmCancelScreen');
     }
@@ -984,12 +1053,13 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        if (res.ok) {
-          document.getElementById('successTitle').textContent = 'キャンセル完了';
-          document.getElementById('successMessage').textContent = '振替をキャンセルしました。期限内であれば再予約可能です。';
-          showScreen('successScreen');
-        } else { throw new Error(); }
+        if (!res.ok) throw new Error();
+        document.getElementById('successTitle').textContent = 'キャンセル完了';
+        document.getElementById('successMessage').textContent = '振替をキャンセルしました。期限内であれば再予約可能です。';
+        showScreen('successScreen');
       } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'キャンセルを確定する';
         showError('キャンセルに失敗しました。');
       }
     }
@@ -1001,16 +1071,18 @@
 
     function closeLiff() {
       try {
-        if (liff.isInClient()) liff.closeWindow();
-        else window.close();
+        if (typeof liff !== 'undefined' && liff.closeWindow) liff.closeWindow();
       } catch (err) {}
+      try { window.close(); } catch (err) {}
       setTimeout(function() {
         document.getElementById('closeMessage').classList.remove('hidden');
       }, 500);
     }
 
     function showScreen(id) {
-      const screens = ['loading', 'choiceScreen', 'studentScreen', 'absenceScreen', 'dateListScreen', 'slotScreen', 'specialScreen', 'confirmScreen', 'cancelScreen', 'confirmCancelScreen', 'successScreen', 'errorScreen'];
+      const screens = ['loading', 'choiceScreen', 'studentScreen', 'absenceScreen', 'dateListScreen',
+                       'slotScreen', 'specialScreen', 'confirmScreen', 'cancelScreen',
+                       'confirmCancelScreen', 'successScreen', 'errorScreen'];
       screens.forEach(function(s) { document.getElementById(s).classList.add('hidden'); });
       document.getElementById(id).classList.remove('hidden');
     }
