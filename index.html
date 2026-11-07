@@ -450,7 +450,7 @@
       <div class="info-box">通常と異なるクラスでの振替をご希望の場合、スタッフに直接リクエストを送信します。</div>
       <textarea id="specialNote" placeholder="希望するクラスや時間帯など、ご要望をご記入ください"></textarea>
     </div>
-    <button class="btn btn-primary" onclick="submitSpecialRequest()">スタッフにリクエストを送信</button>
+    <button class="btn btn-primary" id="specialBtn" onclick="submitSpecialRequest()">スタッフにリクエストを送信</button>
     <button class="btn btn-secondary" onclick="showScreen('dateListScreen')">戻る</button>
   </div>
 
@@ -501,7 +501,7 @@
     <div class="success-screen">
       <div class="success-icon">✅</div>
       <h2 id="successTitle">予約完了</h2>
-      <p id="successMessage">振替を受け付けました。</p>
+      <p id="successMessage" style="white-space: pre-line;">振替を受け付けました。</p>
       <button class="close-btn" onclick="closeLiff()">閉じる</button>
       <p id="closeMessage" class="close-message hidden">画面を下にスワイプして閉じてください。</p>
     </div>
@@ -524,11 +524,10 @@
       // CORS preflight fires that Apps Script cannot answer.
       SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzb3aX4UmvbifSMmRR1NGCuUuDF_AkghJ03jti-V7vO2vK_8UPtDbTPb1tQZu5J288m/exec',
 
-      // WRITES still go to Make, which sends the LINE confirmation and
-      // the staff email after a booking, cancellation or special request.
-      BOOKING_WEBHOOK: 'https://hook.eu1.make.com/hzo6l7awk6grn8cy68zsd908h56y3jm9',
-      CANCEL_WEBHOOK: 'https://hook.eu1.make.com/ps5o8grjljex48tdbf104r1jcpu8a5kv',
-      SPECIAL_WEBHOOK: 'https://hook.eu1.make.com/2dmq1balixq3r3dyk4k3jhvwyijqobpz',
+      // WRITES also go straight to Apps Script (mode=makeup_book /
+      // makeup_cancel / makeup_special). Apps Script updates the sheets,
+      // then sends the LINE message and the staff email itself. Make is
+      // not used by this page.
 
       API_SECRET: '1234567890123456789012345678901234567890'
     };
@@ -878,37 +877,55 @@
       showScreen('confirmScreen');
     }
 
+    function newRequestId() {
+      return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+    }
+
+    function showResult(title, message) {
+      document.getElementById('successTitle').textContent = title;
+      document.getElementById('successMessage').textContent = message;
+      showScreen('successScreen');
+    }
+
+    // Success is shown ONLY when Apps Script confirms 振替予定 was written
+    // and the absence was marked as used.
     async function submitBooking() {
       const btn = document.getElementById('bookBtn');
       btn.disabled = true;
       btn.textContent = '予約中...';
-      const payload = {
-        lineUserId: lineUserId,
-        lineDisplayName: lineDisplayName,
-        studentName: currentStudent.name,
-        className: currentStudent.className,
-        makeupDate: selectedDate.date,
-        makeupTime: selectedSlot.time,
-        makeupClassName: selectedSlot.className,
-        originalAbsenceDate: selectedAbsence.date,
-        originalAbsenceRow: selectedAbsence.row,
-        submittedAt: new Date().toISOString()
-      };
+
+      const requestId = newRequestId();
+
       try {
-        const res = await fetch(CONFIG.BOOKING_WEBHOOK, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        if (!res.ok) throw new Error('Server error');
-        document.getElementById('successTitle').textContent = '予約完了';
-        document.getElementById('successMessage').textContent =
-          currentStudent.name + 'さんの振替を予約しました。\n当日はお忘れなくお越しください。';
-        showScreen('successScreen');
+        const res = await apiGet({
+          mode: 'makeup_book',
+          userId: lineUserId,
+          lineDisplayName: lineDisplayName,
+          studentName: currentStudent.name,
+          className: currentStudent.className,
+          makeupDate: selectedDate.date,
+          makeupTime: selectedSlot.time,
+          makeupClassName: selectedSlot.className,
+          originalAbsenceDate: selectedAbsence.date,
+          requestId: requestId
+        }, 3);
+
+        if (res.ok && res.duplicate) {
+          showResult('予約済み', 'この振替レッスンはすでに予約されています。');
+          return;
+        }
+        if (res.ok) {
+          showResult('予約完了',
+            currentStudent.name + 'さんの振替を予約しました。\n当日はお忘れなくお越しください。');
+          return;
+        }
+        btn.disabled = false;
+        btn.textContent = 'この内容で予約する';
+        showError(res.message || ('予約できませんでした: ' + (res.error || '不明なエラー')));
       } catch (err) {
         btn.disabled = false;
         btn.textContent = 'この内容で予約する';
-        showError('予約に失敗しました。もう一度お試しください。');
+        showError('通信エラーのため予約を確認できませんでした。\nLINEを開き直し、予約状況をご確認ください。');
       }
     }
 
@@ -921,28 +938,33 @@
     }
 
     async function submitSpecialRequest() {
+      const btn = document.getElementById('specialBtn');
+      if (btn) { btn.disabled = true; btn.textContent = '送信中...'; }
       const note = document.getElementById('specialNote').value.trim();
-      const payload = {
-        lineUserId: lineUserId,
-        lineDisplayName: lineDisplayName,
-        studentName: currentStudent.name,
-        className: currentStudent.className,
-        originalAbsenceDate: selectedAbsence ? selectedAbsence.date : 'N/A',
-        note: note || '（備考なし）',
-        submittedAt: new Date().toISOString()
-      };
+      const requestId = newRequestId();
+
       try {
-        const res = await fetch(CONFIG.SPECIAL_WEBHOOK, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        if (!res.ok) throw new Error();
-        document.getElementById('successTitle').textContent = 'リクエスト送信完了';
-        document.getElementById('successMessage').textContent = 'スタッフにリクエストを送信しました。';
-        showScreen('successScreen');
+        const res = await apiGet({
+          mode: 'makeup_special',
+          userId: lineUserId,
+          lineDisplayName: lineDisplayName,
+          studentName: currentStudent.name,
+          className: currentStudent.className,
+          originalAbsenceDate: selectedAbsence ? selectedAbsence.date : '',
+          note: note || '（備考なし）',
+          requestId: requestId
+        }, 3);
+
+        if (res.ok) {
+          showResult('リクエスト送信完了',
+            'スタッフにリクエストを送信しました。\n確認後、LINEでご連絡いたします。');
+          return;
+        }
+        if (btn) { btn.disabled = false; btn.textContent = 'スタッフにリクエストを送信'; }
+        showError(res.message || 'リクエストを送信できませんでした。');
       } catch (err) {
-        showError('リクエストの送信に失敗しました。');
+        if (btn) { btn.disabled = false; btn.textContent = 'スタッフにリクエストを送信'; }
+        showError('通信エラーのためリクエストを送信できませんでした。\nもう一度お試しください。');
       }
     }
 
@@ -1036,31 +1058,35 @@
       const btn = document.getElementById('cancelBtn');
       btn.disabled = true;
       btn.textContent = 'キャンセル中...';
-      const payload = {
-        lineUserId: lineUserId,
-        lineDisplayName: lineDisplayName,
-        studentName: currentStudent.name,
-        bookingDate: selectedBooking.date,
-        bookingTime: selectedBooking.classTime,
-        bookingClassName: selectedBooking.className,
-        bookingRow: selectedBooking.row,
-        originalAbsenceDate: selectedBooking.originalAbsence,
-        submittedAt: new Date().toISOString()
-      };
+
+      const requestId = newRequestId();
+
       try {
-        const res = await fetch(CONFIG.CANCEL_WEBHOOK, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        if (!res.ok) throw new Error();
-        document.getElementById('successTitle').textContent = 'キャンセル完了';
-        document.getElementById('successMessage').textContent = '振替をキャンセルしました。期限内であれば再予約可能です。';
-        showScreen('successScreen');
+        const res = await apiGet({
+          mode: 'makeup_cancel',
+          userId: lineUserId,
+          lineDisplayName: lineDisplayName,
+          studentName: currentStudent.name,
+          bookingRow: selectedBooking.row,
+          bookingDate: selectedBooking.date,
+          bookingTime: selectedBooking.classTime,
+          originalAbsenceDate: selectedBooking.originalAbsence,
+          requestId: requestId
+        }, 3);
+
+        if (res.ok) {
+          showResult('キャンセル完了',
+            '振替をキャンセルしました。' +
+            (res.absenceReverted ? '\n期限内であれば再予約できます。' : ''));
+          return;
+        }
+        btn.disabled = false;
+        btn.textContent = 'キャンセルを確定する';
+        showError(res.message || ('キャンセルできませんでした: ' + (res.error || '不明なエラー')));
       } catch (err) {
         btn.disabled = false;
         btn.textContent = 'キャンセルを確定する';
-        showError('キャンセルに失敗しました。');
+        showError('通信エラーのためキャンセルを確認できませんでした。\nLINEを開き直し、予約状況をご確認ください。');
       }
     }
 
